@@ -23,18 +23,18 @@ Nasıl oynandığını görmek için verilen linkteki videoyu izleyebilirsiniz.[
 
 ## Oyundan görseller 
 
-![Level 1-1](webproje/level1-1.png)
+![Level 1-1](resimler/level1-1.png)
 
 Oyun başladığında karınca bu seviyede duvarı aşmalı ancak başlangıç boyutu bunun için yeterli değil. 
 
-![Level 1-2](webproje/level1-2.png)
+![Level 1-2](resimler/level1-2.png)
 
 Büyütme kapısından iki kere geçtikten sonra yeterli büyüklükte oluyor ve çıkış kapısına ulaşıyor.
 
 
 Oyun başladığında karınca bu seviyede kristali daire alanın büyüklüğüyle orantılı hale getirip taşımalı ancak boyutu bunun için yeterli değil. 
 
-![Level 2-2](webproje/level2-2.png)
+![Level 2-2](resimler/level2-2.png)
 
 Büyütme kapısından bir kere geçtikten sonra yeterli büyüklükte oluyor ve daire alana koyularak çıkış kapısını aktive ediyo .
 
