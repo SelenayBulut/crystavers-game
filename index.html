@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Boyut Oyunu</title>
+  
+  <style>
+    body {
+  margin: 0;
+  background-image: url("resimler/background.png"); /* gorselin dosya adi */
+  background-size: cover;        /* gorseli ekran boyutuna uydurur */
+  background-position: center;   
+  background-repeat: no-repeat;  /* tekrar etmesini engeller */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+    canvas {
+      background-color: #707070;
+      border: 5px solid #000000;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="500" height="550"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+//kullanilacak gorsellerin ve seslerin dosya yollari ile tanimlanmasi
+const antImage = new Image();
+antImage.src = "resimler/alien.png";
+
+const boxImage = new Image();
+boxImage.src = "resimler/crystal.png";
+
+const plateImage = new Image();
+plateImage.src = "resimler/windrose.png"; 
+
+
+const music = new Audio('sesler/music.mp3');
+music.loop = true; //surekli calmasi icin
+
+const carrySound = new Audio('sesler/aliencarry.mp3');
+
+
+let gameStarted = false;
+let level = 1;
+
+
+//baslatma butonu nesnesi
+const button = {
+  x: 180,
+  y: 300,
+  width: 140,
+  height: 50
+};  
+
+//karakter nesnesi 
+const ant = {
+  x: 240,
+  y: 490,
+  width: 50,
+  height: 50,
+  scale: 1,
+  color: "#5a2d0c",
+  carryingBox: false //kristali tasiyip tasimadigini belirtir
+};
+
+
+//kapi nesneleri
+const gates = {
+  right: { x: 470, y: 260, width: 20, height: 80, effect: "teleportToLeftAndSmaller" },
+  left: { x: 10, y: 260, width: 20, height: 40, effect: "teleportToRightAndBigger" },
+  top: { x: 240, y: 10, width: 80, height: 20, effect: "finish" }
+};
+
+//duvar nesnesi
+const walls = [
+  { x: 0, y: 200, width: 230, height: 20 },
+  { x: 270, y: 200, width: 250, height: 20 }
+];
+
+//baskiya duyarli daire alan nesnesi 2.level icin
+const pressurePlate = {
+  x: 350,        //koordinatlari
+  y: 400,
+  width: 60,    // genişliği 
+  height: 60,   // yüksekliği
+  img: plateImage //kullanılacak görsel
+};
+
+
+//baskiya duyarli daire alan nesnesi 3.level icin
+const pressurePlate3 = {
+  x: 300,
+  y: 300,
+  width: 100,    
+  height: 100,   
+  img: plateImage
+};
+
+//cikis kapisi
+const exit = { x: 220, y: 50, width: 60, height: 30, open: false };
+
+//nesneler level3 icin
+const gatesLevel3 = {
+  right: { x: 470, y: 260, width: 20, height: 80, effect: "grow" },
+  left: { x: 10, y: 260, width: 20, height: 40, effect: "shrink" }
+};
+const exit3 = { x: 220, y: 50, width: 50, height: 30, open: false };
+
+// Level 2 kristal nesnesi
+const box = {
+  x: 100,
+  y: 400,
+  width: 50,     
+  height: 50,   
+  carried: false,
+  img: boxImage,
+  scale: 1
+};
+
+// Level 3 kristal  nesnesi
+const box3 = {
+  x: 100,
+  y: 400,
+  width: 50,
+  height: 50,
+  carried: false,
+  img: boxImage,
+  scale: 1
+};
+
+
+//klavye tuslarina basilip basilmadigini takip eder
+let keys = {}; 
+
+//kristalin kapidan gecip gecmedigi kontrolu
+let boxHasPassedGate = false; 
+
+//3. seviyenin baslayip baslamadigi kontrolu
+let level3Started = false;
+
+//baslangic ekrani görsel fonksiyonu 
+function drawStartScreen() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.fillStyle = "#707070";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Başlık
+  ctx.fillStyle = "#fff";
+  ctx.font = "48px Georgia";
+  ctx.textAlign = "center";
+  ctx.fillText("CRYSTAVERSE", canvas.width / 2, 180);
+  
+  // Play butonu
+  ctx.fillStyle = "#333";
+  ctx.fillRect(button.x, button.y, button.width, button.height);
+  
+  ctx.fillStyle = "#fff";
+  ctx.font = "28px Georgia";
+  ctx.fillText("PLAY", button.x + button.width / 2, button.y + 35);
+}
+
+// karakterin cizilmesi fonksiyonu
+function drawAnt() {
+  ctx.fillStyle = ant.color;
+  ctx.drawImage(antImage, ant.x, ant.y, ant.width * ant.scale, ant.height * ant.scale);
+
+}
+
+//kapılarin cizilmesi fonksiyonu
+function drawGates() {
+  ctx.fillStyle = "#000";
+  Object.values(gates).forEach(g => {
+    ctx.fillRect(g.x, g.y, g.width, g.height);
+  });
+}
+
+//duvarın cizilmesi fonksiyonu
+function drawWalls() {
+  ctx.fillStyle = "#dbdbdb";
+  walls.forEach(wall => ctx.fillRect(wall.x, wall.y, wall.width, wall.height));
+}
+
+//kristalin cizilmesi fonksiyonu
+function drawBox() {
+  ctx.fillStyle = "#8B4513";
+  ctx.drawImage(box.img, box.x, box.y, box.width * box.scale, box.height * box.scale);
+}
+
+//daire alalnın cizilmesi fonksiyonu
+function drawPressurePlate() {
+  ctx.drawImage(
+  pressurePlate.img,
+  pressurePlate.x,
+  pressurePlate.y,
+  pressurePlate.width,
+  pressurePlate.height
+);
+
+}
+
+//cikis nesensinin cizilme fonksiyonu
+function drawExit() {
+  ctx.fillStyle = exit.open ? "green" : "gray";
+  ctx.fillRect(exit.x, exit.y, exit.width, exit.height);
+}
+
+// bu fonskiyon iki dikdortgenin biribirine carpisip carpismadigini kontrol eder 
+//kesisme varsa true dondurur 
+function isRectColliding(x1, y1, w1, h1, x2, y2, w2, h2) {
+  return (
+    x1 < x2 + w2 &&
+    x1 + w1 > x2 &&
+    y1 < y2 + h2 &&
+    y1 + h1 > y2
+  );
+}
+
+//iki nesnenin carpisip carpismadigini kontrol eder
+function isColliding(a, b) {
+  return isRectColliding(a.x, a.y, a.width * a.scale, a.height * a.scale, b.x, b.y, b.width, b.height);
+  //widgth*scale sebebi nesenelerin boyutlarinin buyuyp kuculebilmeleri sebebiyle degisebilmesidir
+}
+
+//karakterin özelliklerini sifirlar
+function resetAnt() {
+  ant.x = 240;
+  ant.y = 490;
+  ant.scale = 1;
+  ant.carryingBox = false;
+
+  box.x = 100;
+  box.y = 400;
+  box.carried = false;
+
+  box3.x = 100;
+  box3.y = 400;
+  box3.scale = 1;
+  box3.carried = false;
+
+  boxHasPassedGate = false;
+  level3Started = false;
+}
+
+
+//levellere özel oyunun oynanisini anlatan metinlerin gorsel fonksiyonları
+function drawLevelText(text, x, y, lineHeight = 20) {
+  const lines = text.split('\n');  // '\n' göre satırları ayır
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, y + i * lineHeight);
+  }
+}
+
+//oyunun 1. seviyedeki mantigidir
+function updateLevel1() {
+
+  //karakterin gitmek istedigi yönü belirler
+  const futureX = ant.x + (keys["ArrowRight"] ? 2 : keys["ArrowLeft"] ? -2 : 0);
+  const futureY = ant.y + (keys["ArrowDown"] ? 2 : keys["ArrowUp"] ? -2 : 0);
+
+  //duvarla carpisma olup olmadigi kontrolu icin bayrak degiskeni
+  let willCollideWall = false;
+
+  //duvarlari kontrol eder
+  for (const wall of walls) {
+    //cakisiyorsa
+    if (isRectColliding(futureX, futureY, ant.width * ant.scale, ant.height * ant.scale, wall.x, wall.y, wall.width, wall.height)) {
+      willCollideWall = true;//carpisma var
+      break;
+    }
+  }
+
+  //carpisma yoksa karakter harekete devam edebilir
+  if (!willCollideWall) {
+    if (keys["ArrowUp"] && ant.y > 0) ant.y -= 3;
+    if (keys["ArrowDown"] && ant.y + ant.height * ant.scale < canvas.height) ant.y += 3;
+    if (keys["ArrowLeft"] && ant.x > 0) ant.x -= 3;
+    if (keys["ArrowRight"] && ant.x + ant.width * ant.scale < canvas.width) ant.x += 3;
+  }
+
+  //kapilarla carpisma kontrolu
+  for (const gateKey in gates) {
+    const gate = gates[gateKey];
+
+    //carpisma varsa
+    if (isColliding(ant, gate)) {
+
+      //kapi saga isinlayip kucultuyorsa
+      if (gate.effect === "teleportToLeftAndSmaller") {
+        ant.scale = Math.max(0.5, ant.scale - 0.25);//karakteri kucultur
+        ant.x = gates.left.x + gates.left.width + 5;//sol kapiya isinlar
+        ant.y = gates.left.y;
+      } 
+      //kapi sola isinlayip buyutuyorsa
+      else if (gate.effect === "teleportToRightAndBigger") {
+        ant.scale = Math.min(2, ant.scale + 0.25);
+        ant.x = gates.right.x - ant.width * ant.scale - 5;
+        ant.y = gates.right.y;
+      } 
+      //kapi bitiriyorsa ve karınca istenen kucuklukteyse
+      else if (gate.effect === "finish" && ant.scale === 0.5) {
+        level = 2;//level 2 ye gecilir
+        resetAnt();//karakter özellikleri ve kutular sifirlanir
+      }
+    }
+  }
+}
+
+//oyunun 2. seviyedeki mantigidir
+function updateLevel2() {
+
+  //karakterin gitmek istedigi yönü belirler
+  if (keys["ArrowLeft"] && ant.x > 0) ant.x -= 4;
+  if (keys["ArrowRight"] && ant.x + ant.width < canvas.width) ant.x += 4;
+  if (keys["ArrowUp"] && ant.y > 0) ant.y -= 4;
+  if (keys["ArrowDown"] && ant.y + ant.height < canvas.height) ant.y += 4;
+
+  //e tusuna basildiginda kristali alma birakma islemini saglar
+  if (keys["e"] && !keys["_eHandled"]) {
+     let didCarryOrDrop = false;
+
+     //karakter kristali tasimiyorsa ve kristal cakisiyorsa kristali al
+    if (!ant.carryingBox && isRectColliding(ant.x, ant.y, ant.width, ant.height, box.x, box.y, box.width, box.height)) {
+      ant.carryingBox = true;
+      box.carried = true;
+      didCarryOrDrop = true;
+
+      //karakter kristal tasiyorsa kritali birak
+    } else if (ant.carryingBox) {
+      ant.carryingBox = false;
+      box.carried = false;
+      box.x = ant.x;
+      box.y = ant.y;
+      didCarryOrDrop = true;
+    }
+
+    // Eğer işlem gerçekleştiyse ses çal
+    if (didCarryOrDrop) {
+      carrySound.currentTime = 0;
+      carrySound.play().catch(e => {
+        console.log("Ses çalınamadı:", e);
+      });
+    }
+
+    //bu islem bir kere  yapilmali
+    keys["_eHandled"] = true;
+  }
+
+  //e tusu birakildiginda bayragi sifirlar
+  if (!keys["e"]) keys["_eHandled"] = false;
+
+  //karakter kristali tasiyorsa kristal konumunu kararkterin uzerine ayarlar
+  if (box.carried) {
+    box.x = ant.x + (ant.width - box.width) / 2;
+    box.y = ant.y - box.height;
+  }
+
+  //karakter ya da kristal daire alana degiyorsa
+  const onPlate =
+  isRectColliding(ant.x, ant.y, ant.width, ant.height, pressurePlate.x, pressurePlate.y, pressurePlate.width, pressurePlate.height) ||
+  isRectColliding(box.x, box.y, box.width, box.height, pressurePlate.x, pressurePlate.y, pressurePlate.width, pressurePlate.height);
+
+  //cikisi ac
+  exit.open = onPlate;
+
+  //cikis aciksa ve karakter cikisin uzerindeyse
+  if (exit.open && isRectColliding(ant.x, ant.y, ant.width, ant.height, exit.x, exit.y, exit.width, exit.height)) {
+    level = 3;//level 3 e gec
+    resetAnt();//karakteri sifirla
+    level3Started = true;
+  }
+}
+
+//oyunun 3. seviyedeki mantigidir
+function updateLevel3() {
+
+  // Karakterin ok tuşları ile hareketi
+  if (keys["ArrowUp"] ) {
+    if (ant.y > 0) ant.y -= 3;
+  }
+  if (keys["ArrowDown"] ) {
+    if (ant.y + ant.height * ant.scale < canvas.height) ant.y += 3;
+  }
+  if (keys["ArrowLeft"] ) {
+    if (ant.x > 0) ant.x -= 3;
+  }
+  if (keys["ArrowRight"]) {
+    if (ant.x + ant.width * ant.scale < canvas.width) ant.x += 3;
+  }
+
+  // Kutuyu taşıma mekaniği (E tuşu ile) ayni mantik level 2 ile
+    if (keys["e"] && !keys["_eHandled"]) {
+
+       let didCarryOrDrop = false;
+
+    if (!box3.carried && isRectColliding(ant.x, ant.y, ant.width * ant.scale, ant.height * ant.scale, box3.x, box3.y, box3.width * box3.scale, box3.height * box3.scale)) {
+      box3.carried = true;
+      ant.carryingBox = true;
+      didCarryOrDrop = true;
+
+    } else if (box3.carried) {
+      box3.carried = false;
+      ant.carryingBox = false;
+      box3.x = ant.x;
+      box3.y = ant.y;
+      didCarryOrDrop = true;
+
+    }
+    // Eğer kutu alındıysa veya bırakıldıysa ses çal
+  if (didCarryOrDrop) {
+    carrySound.currentTime = 0;
+    carrySound.play().catch(e => {
+      console.log("Ses çalınamadı:", e);
+    });
+  }
+
+    keys["_eHandled"] = true;
+  }
+  if (!keys["e"]) keys["_eHandled"] = false;
+
+  //kristal tasiniyorsa karakterin ustunde konumlanmasini saglar
+  if (box3.carried) {
+    box3.x = ant.x + (ant.width * ant.scale - box3.width * box3.scale) / 2;
+    box3.y = ant.y - box3.height * box3.scale;
+  }
+
+  // Kapılardan geçiş ve büyüme/küçülme mekanizması aynı mantik
+  for (const gateKey in gatesLevel3) {
+    const gate = gatesLevel3[gateKey];
+    if (isRectColliding(ant.x, ant.y, ant.width * ant.scale, ant.height * ant.scale, gate.x, gate.y, gate.width, gate.height)) {
+      
+      if (gate.effect === "grow") {
+        if (ant.scale < 2) ant.scale += 0.5;
+        if (box3.scale < 2) box3.scale += 0.5;
+
+        ant.x = gatesLevel3.left.x + gatesLevel3.left.width + 5;
+        ant.y = gatesLevel3.left.y;
+      } 
+      
+      else if (gate.effect === "shrink") {
+        if (ant.scale > 0.5) ant.scale -= 0.5;
+        if (box3.scale > 0.5) box3.scale -= 0.5;
+        
+        ant.x = gatesLevel3.right.x - ant.width * ant.scale - 5;
+        ant.y = gatesLevel3.right.y;
+      }
+    }
+  }
+
+  // kristalin büyüme kapısından geçip geçmediğini kontrol et 
+  if (box3.x + box3.width * box3.scale > gatesLevel3.right.x &&
+      box3.x < gatesLevel3.right.x + gatesLevel3.right.width &&
+      box3.y + box3.height * box3.scale > gatesLevel3.right.y &&
+      box3.y < gatesLevel3.right.y + gatesLevel3.right.height) {
+    boxHasPassedGate = true;
+  }
+
+  // Daire alanda kristal var mı ve kristal büyüme kapısından geçti mi kontrolu yapar
+const boxCenterX = box3.x + (box3.width * box3.scale) / 2;
+const boxCenterY = box3.y + (box3.height * box3.scale) / 2;
+const antCenterX = ant.x + (ant.width * ant.scale) / 2;
+const antCenterY = ant.y + (ant.height * ant.scale) / 2;
+
+const boxOnPlate = isRectColliding(
+  box3.x, box3.y, box3.width * box3.scale, box3.height * box3.scale,
+  pressurePlate3.x, pressurePlate3.y, pressurePlate3.width, pressurePlate3.height
+);
+
+const antOnPlate = isRectColliding(
+  ant.x, ant.y, ant.width * ant.scale, ant.height * ant.scale,
+  pressurePlate3.x, pressurePlate3.y, pressurePlate3.width, pressurePlate3.height
+);
+
+// Kristal sadece büyüyken kapı açabilsin
+exit3.open = ((boxOnPlate && boxHasPassedGate && box3.scale >= 1.5) || antOnPlate);
+
+
+  // Kapıdan çıkış
+  if (exit3.open && isRectColliding(ant.x, ant.y, ant.width * ant.scale, ant.height * ant.scale, exit3.x, exit3.y, exit3.width, exit3.height)) {
+    alert("Level 3 tamamlandı! oyun bitti!");
+    level = 1;
+    resetAnt();
+    gameStarted = false; 
+  }
+}
+
+
+  
+
+function drawLevel1() {
+
+  //canvasi temziler öncekileri siler
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  //duvarlari kapilari karakteri cizer
+  drawWalls();
+  drawGates();
+  drawAnt();
+
+  //metin ve ayarlari
+  ctx.font = "16px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "left";
+  drawLevelText("Ok tuşlarıyla hareket et. \nKapıları kullanarak \nboyutunu değiştir. \nÇıkış kapısına ulaş!", 20, 30);
+
+}
+
+function drawLevel2() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawPressurePlate();
+  drawBox();
+  drawExit();
+  drawAnt();
+
+ctx.font = "16px Arial";
+ctx.fillStyle = "white";
+ctx.textAlign = "left";
+
+  drawLevelText(" 'E' ile kristali taşı, \n daireye yerleştir!", 20, 30);
+}
+
+function drawLevel3() {
+
+  //canvas sifirlama
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  //daire alan
+  ctx.drawImage(
+  pressurePlate3.img,
+  pressurePlate3.x,
+  pressurePlate3.y,
+  pressurePlate3.width,
+  pressurePlate3.height
+);
+
+  // Kapılar
+  ctx.fillStyle = "black";
+  ctx.fillRect(gatesLevel3.right.x, gatesLevel3.right.y, gatesLevel3.right.width, gatesLevel3.right.height);
+  ctx.fillRect(gatesLevel3.left.x, gatesLevel3.left.y, gatesLevel3.left.width, gatesLevel3.left.height);
+
+  // Kutunun çizimi (ölçeklenmiş)
+  ctx.fillStyle = "#8B4513";
+  ctx.drawImage(box3.img, box3.x, box3.y, box3.width * box3.scale, box3.height * box3.scale);
+
+  // Kapı (exit3)
+  ctx.fillStyle = exit3.open ? "green" : "gray";
+  ctx.fillRect(exit3.x, exit3.y, exit3.width, exit3.height);
+
+  drawAnt();
+  ctx.font = "16px Arial";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "left";
+
+  drawLevelText(" Kristal ile kapılardan geçemeyi dene!", 20, 30);
+}
+
+function gameLoop() {
+  if (!gameStarted) {
+    drawStartScreen();
+  } else {
+    // Oyun başladığında çağrılacak güncelleme ve çizim fonksiyonları
+    if (level === 1) {
+      updateLevel1();
+      drawLevel1();
+    } else if (level === 2) {
+      updateLevel2();
+      drawLevel2();
+    } else if (level === 3) {
+      updateLevel3();
+      drawLevel3();
+    }
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+//tıklama olayi
+canvas.addEventListener("click", function(event) {
+
+  //baslangic ekranindaysak
+  if (!gameStarted) {
+
+    //canvasin boyutunu ve konumunu alir
+    const rect = canvas.getBoundingClientRect();
+
+    //tiklamanin koordinatlarini hesaplar
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+
+    //koordinatlar butonun alaninin icindeyse
+    if (clickX >= button.x && clickX <= button.x + button.width &&
+        clickY >= button.y && clickY <= button.y + button.height) {
+        
+        //oyunu baslat level 1 den 
+        gameStarted = true;
+        level = 1;
+        resetAnt();  // Oyun başladığında karakteri sıfırla
+
+      // Müzik başlat
+      music.play().catch(e => {
+        console.log("Müzik otomatik çalınamadı:", e);
+      });
+    }
+  }
+});
+
+//klavyeden bi tusa basildiginda calisir 
+window.addEventListener("keydown", e => {
+  keys[e.key] = true;//basilan tusu keys e true olarak kaydeder
+});
+
+//klavyeden bi tusa birakildiginda calisir 
+window.addEventListener("keyup", e => {
+  keys[e.key] = false;
+});
+
+resetAnt();
+gameLoop();
+</script>
+</body>
+</html>
